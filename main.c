@@ -1,0 +1,40 @@
+#include <stdio.h>
+#include <windows.h>
+#include "cli/cli.h"
+#include "process/process.h"
+#include "scheduler/scheduler.h"
+#include "memory/memory.h"
+#include "filesystem/filesystem.h"
+#include "security/auth.h"
+#include "sync/sync.h"
+#include "monitor/monitor.h"
+
+void boot_animation() {
+    printf("Booting MiniOS v1.0...\n");
+    printf("[");
+    for (int i = 0; i <= 50; i++) {
+        printf("*");
+        Sleep(30); // 20ms delay
+    }
+    printf("] 100%%\n");
+    printf("Loading Kernel...");
+    Sleep(500);
+    printf(" Done.\n");
+    printf("Mounting Filesystem...");
+    Sleep(500);
+    printf(" Done.\n");
+    printf("Starting Services...");
+    Sleep(500);
+    printf(" Done.\n");
+    Sleep(500);
+}
+
+int main() {
+    boot_animation();
+    load_filesystem();
+    init_auth();
+    init_system_monitor();
+    init_producer_consumer();
+    start_cli();
+    return 0;
+}
