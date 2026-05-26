@@ -1,17 +1,13 @@
 #include "../ai/ai.h"
 #include "../filesystem/filesystem.h"
-#include "../memory/memory.h"
 #include "../monitor/monitor.h"
 #include "../process/process.h"
-#include "../scheduler/scheduler.h"
 #include "../security/auth.h"
-#include "../sync/sync.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
-// ANSI Color Codes
 #define COLOR_RESET "\033[0m"
 #define COLOR_RED "\033[31m"
 #define COLOR_GREEN "\033[32m"
@@ -25,7 +21,6 @@
 char history[MAX_HISTORY][100];
 int history_count = 0;
 
-/* Aliases support */
 #define MAX_ALIASES 50
 typedef struct { char name[32]; char cmd[200]; char owner[20]; int system; } Alias;
 static Alias aliases[MAX_ALIASES];
@@ -37,56 +32,6 @@ static Alias *find_alias(const char *name) {
     if (strcmp(aliases[i].name, name) == 0) return &aliases[i];
   }
   return NULL;
-}
-
-static void add_alias(const char *name, const char *cmd, int system) {
-  if (!name || !cmd) return;
-  Alias *existing = find_alias(name);
-  if (existing) {
-    // only owner or admin can overwrite
-    const char *cur = get_current_user();
-    if (existing->system && !is_admin()) { printf(COLOR_RED "Cannot overwrite system alias\n" COLOR_RESET); return; }
-    if (!existing->system && strcmp(existing->owner, cur) != 0 && !is_admin()) { printf(COLOR_RED "Cannot overwrite alias owned by %s\n" COLOR_RESET, existing->owner); return; }
-    strncpy(existing->cmd, cmd, sizeof(existing->cmd)-1); existing->cmd[sizeof(existing->cmd)-1]='\0';
-    printf("Alias '%s' updated.\n", name);
-    return;
-  }
-  if (alias_count >= MAX_ALIASES) { printf("Alias limit reached.\n"); return; }
-  strncpy(aliases[alias_count].name, name, sizeof(aliases[alias_count].name)-1);
-  strncpy(aliases[alias_count].cmd, cmd, sizeof(aliases[alias_count].cmd)-1);
-  strncpy(aliases[alias_count].owner, get_current_user(), sizeof(aliases[alias_count].owner)-1);
-  aliases[alias_count].name[sizeof(aliases[alias_count].name)-1]='\0';
-  aliases[alias_count].cmd[sizeof(aliases[alias_count].cmd)-1]='\0';
-  aliases[alias_count].owner[sizeof(aliases[alias_count].owner)-1]='\0';
-  aliases[alias_count].system = system;
-  alias_count++;
-  printf("Alias '%s' added.\n", name);
-}
-
-static void remove_alias(const char *name) {
-  if (!name) return;
-  for (int i = 0; i < alias_count; i++) {
-    if (strcmp(aliases[i].name, name) == 0) {
-      const char *cur = get_current_user();
-      if (aliases[i].system && !is_admin()) { printf(COLOR_RED "Cannot remove system alias\n" COLOR_RESET); return; }
-      if (!aliases[i].system && strcmp(aliases[i].owner, cur) != 0 && !is_admin()) { printf(COLOR_RED "Cannot remove alias owned by %s\n" COLOR_RESET, aliases[i].owner); return; }
-      for (int j = i; j < alias_count-1; j++) aliases[j] = aliases[j+1];
-      alias_count--;
-      printf("Alias '%s' removed.\n", name);
-      return;
-    }
-  }
-  printf("Alias '%s' not found.\n", name);
-}
-
-static void list_aliases() {
-  const char *cur = get_current_user();
-  printf("Aliases:\n");
-  for (int i = 0; i < alias_count; i++) {
-    if (aliases[i].system || is_admin() || strcmp(aliases[i].owner, cur) == 0) {
-      printf("  %s => %s (owner: %s%s)\n", aliases[i].name, aliases[i].cmd, aliases[i].owner, aliases[i].system?" [system]":"");
-    }
-  }
 }
 
 void add_to_history(const char *cmd) {
@@ -132,7 +77,7 @@ void help_command() {
   printf("  " COLOR_BOLD "System:" COLOR_RESET "\n");
   printf("    help                - Show this help message\n");
   printf("    clear               - Clear the screen\n");
-  printf("    shutdown            - Shutdown the OS (Admin only)\n");
+  printf("    shutdown            - Shutdown the OS\n");
   printf("    login               - Login to the system\n");
   printf("    logout              - Logout current user\n");
   printf("    whoami              - Show current user\n");
@@ -146,24 +91,16 @@ void help_command() {
   printf("    kill <pid>          - Terminate a process\n");
   printf("    suspend <pid>       - Suspend (block) a process\n");
   printf("    resume <pid>        - Resume (unblock) a process\n");
-  printf("    schedule            - Run FCFS scheduler\n");
   printf("    top                 - Show CPU and process stats\n");
-
-  /* Memory Management section removed */
 
   printf("  " COLOR_BOLD "Filesystem:" COLOR_RESET "\n");
   printf("    ls                  - List files\n");
   printf("    touch <name>        - Create a file\n");
-    printf("    rm <name>           - Delete a file\n");
-    printf("    mv <old> <new>      - Rename a file\n");
-    printf("    cp <src> <dest>     - Copy a file\n");
-    printf("    write <name> <txt>  - Write text to a file\n");
+  printf("    rm <name>           - Delete a file\n");
+  printf("    mv <old> <new>      - Rename a file\n");
+  printf("    write <name> <txt>  - Write text to a file\n");
   printf("    cat <name>          - Read file content\n");
   printf("    share <name> <enable|disable> - Set file share (read-only for others)\n");
-  printf("    alias <name> <cmd>  - Create alias for current user\n");
-  printf("    alias -s <name> <cmd> - (admin) Create system alias for all users\n");
-  printf("    unalias <name>      - Remove alias\n");
-  printf("    aliases             - List aliases visible to you\n");
   printf("    mkdir <name>        - Create directory\n");
   printf("    rmdir <name>        - Remove directory (must be empty)\n");
 
@@ -173,8 +110,6 @@ void help_command() {
   printf("    ai automate <task>      - Suggest MiniOS commands for a task\n");
   printf("    ai models               - List available AI models\n");
   printf("    ai model <name>         - Set active AI model\n");
-
-    /* Concurrency section removed */
 }
 
 void clear_screen() {
@@ -187,7 +122,7 @@ void clear_screen() {
 
 void start_cli() {
   char input[100];
-  char raw_input[100]; // Keep raw input for history
+  char raw_input[100];
   char *command;
   char *arg1;
   char *arg2;
@@ -196,25 +131,20 @@ void start_cli() {
   print_banner();
 
   while (1) {
-    // Prompt
     printf(COLOR_GREEN "[%s@MiniOS]" COLOR_RESET "$ ", get_current_user());
 
     if (fgets(input, sizeof(input), stdin) == NULL) {
-      break; // EOF
+      break;
     }
 
-    // Remove newline
     input[strcspn(input, "\n")] = 0;
 
-    // Skip empty lines
     if (strlen(input) == 0)
       continue;
 
-    // Save to history (copy before strtok)
     strcpy(raw_input, input);
     add_to_history(raw_input);
 
-    // Alias expansion: peek first token to see if an alias exists
     char peek[256];
     strcpy(peek, raw_input);
     char *peek_cmd = strtok(peek, " ");
@@ -228,19 +158,16 @@ void start_cli() {
         strncat(expanded, " ", sizeof(expanded)-strlen(expanded)-1);
         strncat(expanded, peek_args, sizeof(expanded)-strlen(expanded)-1);
       }
-      // copy expanded back into input for normal processing
       strcpy(input, expanded);
     }
 
-    // Tokenize (after expansion if any)
     command = strtok(input, " ");
     arg1 = strtok(NULL, " ");
-    arg2 = strtok(NULL, ""); // Get the rest of the string for arg2 (useful for write content)
+    arg2 = strtok(NULL, "");
 
     if (command == NULL)
       continue;
 
-    // --- System Commands ---
     if (strcmp(command, "help") == 0) {
       help_command();
     } else if (strcmp(command, "clear") == 0) {
@@ -267,15 +194,9 @@ void start_cli() {
       printf("Current user: " COLOR_BOLD "%s" COLOR_RESET "\n",
              get_current_user());
     } else if (strcmp(command, "shutdown") == 0) {
-      if (!is_admin()) {
-        printf(COLOR_RED "Error: Admin privileges required!\n" COLOR_RESET);
-      } else {
-        printf("Shutting down...\n");
-        break;
-      }
-    }
-    // --- Process Commands ---
-    else if (strcmp(command, "ps") == 0) {
+      printf("Shutting down...\n");
+      break;
+    } else if (strcmp(command, "ps") == 0) {
       list_processes();
     } else if (strcmp(command, "create_process") == 0) {
       create_process();
@@ -300,17 +221,12 @@ void start_cli() {
       } else {
         printf(COLOR_RED "Usage: resume <pid>\n" COLOR_RESET);
       }
-    } else if (strcmp(command, "schedule") == 0) {
-      schedule_fcfs();
     } else if (strcmp(command, "top") == 0) {
       show_cpu_usage();
       show_process_stats();
     } else if (strcmp(command, "uptime") == 0) {
       show_uptime();
-    }
-    // Memory management commands removed
-    // --- Filesystem Commands ---
-    else if (strcmp(command, "ls") == 0) {
+    } else if (strcmp(command, "ls") == 0) {
       list_files();
     } else if (strcmp(command, "touch") == 0) {
       if (arg1) {
@@ -357,7 +273,7 @@ void start_cli() {
     } else if (strcmp(command, "share") == 0) {
       if (arg1 && arg2) {
         char *mode = arg2;
-        while (*mode == ' ') mode++; // trim leading spaces
+        while (*mode == ' ') mode++;
         if (strcmp(mode, "enable") == 0) {
           set_file_share(arg1, 1);
         } else if (strcmp(mode, "disable") == 0) {
@@ -368,10 +284,7 @@ void start_cli() {
       } else {
         printf(COLOR_RED "Usage: share <filename> <enable|disable>\n" COLOR_RESET);
       }
-    }
-    // Concurrency commands removed
-    // --- AI Commands ---
-    else if (strcmp(command, "ai") == 0) {
+    } else if (strcmp(command, "ai") == 0) {
       if (!arg1) {
         printf(COLOR_RED "Usage: ai <ask|summarize|automate|models|model>\n" COLOR_RESET);
       } else if (strcmp(arg1, "models") == 0) {
@@ -433,8 +346,7 @@ void start_cli() {
       } else {
         printf(COLOR_RED "Unknown ai subcommand: %s\n" COLOR_RESET, arg1);
       }
-    }
-    else {
+    } else {
       printf(COLOR_RED "Unknown command: %s\n" COLOR_RESET, command);
     }
   }

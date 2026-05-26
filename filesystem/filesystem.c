@@ -9,8 +9,8 @@ typedef struct {
   char name[50];
   char content[200];
   char owner[20];
-  int shared; /* 0 = private, 1 = shared */
-  int is_dir; /* 0 = file, 1 = directory */
+  int shared;
+  int is_dir;
 } File;
 File files[50];
 int file_count = 0;
@@ -21,7 +21,6 @@ void save_filesystem() {
         fwrite(&file_count, sizeof(int), 1, f);
         fwrite(files, sizeof(File), file_count, f);
         fclose(f);
-        // printf("DEBUG: Filesystem saved.\n");
     } else {
         printf("Error: Could not save filesystem.\n");
     }
@@ -54,15 +53,14 @@ void touch_file(const char *name) {
   printf("File '%s' created (owner: %s).\n", name, get_current_user());
   save_filesystem();
 }
+
 void write_file(const char *name, const char *content) {
   for (int i = 0; i < file_count; i++) {
     if (strcmp(files[i].name, name) == 0) {
-      /* Prevent writing to a directory */
       if (files[i].is_dir) {
         printf("Cannot write: '%s' is a directory.\n", name);
         return;
       }
-      /* Permission: only owner or admin can modify */
       const char *cur = get_current_user();
       if (strcmp(files[i].owner, cur) != 0 && !is_admin()) {
         printf("Permission denied: only owner (%s) or admin can modify '%s'.\n", files[i].owner, name);
@@ -75,7 +73,6 @@ void write_file(const char *name, const char *content) {
       return;
     }
   }
-  /* Create new file if not exist; owner is current user */
   if (file_count >= 50) {
     printf("Filesystem full.\n");
     return;
@@ -91,6 +88,7 @@ void write_file(const char *name, const char *content) {
   printf("File '%s' created and written (owner: %s).\n", name, get_current_user());
   save_filesystem();
 }
+
 void read_file(const char *name) {
   for (int i = 0; i < file_count; i++) {
     if (strcmp(files[i].name, name) == 0) {
@@ -122,7 +120,6 @@ void delete_file(const char *name) {
         printf("Permission denied: only owner (%s) or admin can delete '%s'.\n", files[i].owner, name);
         return;
       }
-      // Shift remaining files
       for (int j = i; j < file_count - 1; j++) {
         files[j] = files[j + 1];
       }
@@ -152,73 +149,20 @@ void rename_file(const char *old_name, const char *new_name) {
   printf("File '%s' not found.\n", old_name);
 }
 
-void copy_file(const char *src, const char *dest) {
-    int src_index = -1;
-    // Find source file
-    for(int i=0; i<file_count; i++){
-        if(strcmp(files[i].name, src) == 0){
-            src_index = i;
-            break;
-        }
-    }
-    
-    if(src_index == -1){
-        printf("Source file '%s' not found.\n", src);
-        return;
-    }
-    
-    // Check if dest exists
-    for(int i=0; i<file_count; i++){
-        if(strcmp(files[i].name, dest) == 0){
-             printf("Destination file '%s' already exists.\n", dest);
-             return;
-        }
-    }
-
-    if(file_count >= 50) {
-      printf("Filesystem full.\n");
-      return;
-    }
-
-    /* Check source read permission */
-    const char *cur = get_current_user();
-    if (!files[src_index].shared && strcmp(files[src_index].owner, cur) != 0 && !is_admin()) {
-      printf("Permission denied: source '%s' is private (owner: %s).\n", src, files[src_index].owner);
-      return;
-    }
-
-    /* Copy data; new file owner is current user */
-    if (files[src_index].is_dir) {
-      printf("Cannot copy directory '%s'.\n", src);
-      return;
-    }
-    strcpy(files[file_count].name, dest);
-    strncpy(files[file_count].content, files[src_index].content, sizeof(files[file_count].content)-1);
-    files[file_count].content[sizeof(files[file_count].content)-1] = '\0';
-    strncpy(files[file_count].owner, cur, sizeof(files[file_count].owner)-1);
-    files[file_count].owner[sizeof(files[file_count].owner)-1] = '\0';
-    files[file_count].shared = 0;
-    files[file_count].is_dir = 0;
-    file_count++;
-    printf("File copied from '%s' to '%s' (owner: %s).\n", src, dest, cur);
-    save_filesystem();
-}
-
 void list_files() {
-  printf("-------------------------------------------------------------------------------\n");
-  printf(" %-4s | %-20s | %-6s | %-10s | %-6s \n", "ID", "Filename", "Size","Owner","Shared");
-  printf("-------------------------------------------------------------------------------\n");
+  printf("----------------------------------------------------------------------------------------------------\n");
+  printf(" %-4s | %-20s | %-6s | %-6s | %-10s | %-6s \n", "ID", "Filename", "Type", "Size", "Owner", "Shared");
+  printf("----------------------------------------------------------------------------------------------------\n");
   if (file_count == 0) {
     printf(" (No files)\n");
   } else {
     const char *cur = get_current_user();
     int shown = 0;
     for (int i = 0; i < file_count; i++) {
-      /* Visibility: show only if shared, owned by current user, or admin */
       int visible = is_admin() || files[i].shared || (strcmp(files[i].owner, cur) == 0);
       if (!visible) continue;
       shown++;
-      printf(" %-4d | %-20s | %-6s | %-10lu | %-10s | %-6s\n", shown,
+      printf(" %-4d | %-20s | %-6s | %-6lu | %-10s | %-6s\n", shown,
              files[i].name,
              files[i].is_dir ? "DIR" : "FILE",
              (unsigned long)strlen(files[i].content), files[i].owner,
@@ -226,7 +170,7 @@ void list_files() {
     }
     if (!shown) printf(" (No visible files)\n");
   }
-  printf("-------------------------------------------------------------------------------\n");
+  printf("----------------------------------------------------------------------------------------------------\n");
 }
 
 void make_dir(const char *name) {
@@ -272,7 +216,6 @@ void remove_dir(const char *name) {
     printf("Permission denied: only owner (%s) or admin can remove directory '%s'.\n", files[idx].owner, name);
     return;
   }
-  /* Check emptiness: no file with prefix "name/" */
   size_t nlen = strlen(name);
   for (int i = 0; i < file_count; i++) {
     if (i == idx) continue;

@@ -3,11 +3,8 @@
 #include "ai/ai.h"
 #include "cli/cli.h"
 #include "process/process.h"
-#include "scheduler/scheduler.h"
-#include "memory/memory.h"
 #include "filesystem/filesystem.h"
 #include "security/auth.h"
-#include "sync/sync.h"
 #include "monitor/monitor.h"
 
 void boot_animation() {
@@ -15,7 +12,7 @@ void boot_animation() {
     printf("[");
     for (int i = 0; i <= 50; i++) {
         printf("*");
-        Sleep(30); // 20ms delay
+        Sleep(30);
     }
     printf("] 100%%\n");
     printf("Loading Kernel...");
@@ -38,7 +35,6 @@ int main() {
     load_filesystem();
     init_auth();
     init_system_monitor();
-    init_producer_consumer();
     init_ai();
     start_cli();
     return 0;
