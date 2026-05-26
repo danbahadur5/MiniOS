@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <windows.h>
+#include "ai/ai.h"
 #include "cli/cli.h"
 #include "process/process.h"
 #include "scheduler/scheduler.h"
@@ -26,6 +27,9 @@ void boot_animation() {
     printf("Starting Services...");
     Sleep(500);
     printf(" Done.\n");
+    printf("Loading AI Module...");
+    Sleep(500);
+    printf(" Done.\n");
     Sleep(500);
 }
 
@@ -35,6 +39,7 @@ int main() {
     init_auth();
     init_system_monitor();
     init_producer_consumer();
+    init_ai();
     start_cli();
     return 0;
 }

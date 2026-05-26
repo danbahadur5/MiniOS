@@ -6,17 +6,23 @@ typedef struct {
   char password[20];
   int is_admin;
 } User;
-User users[2] = {{"admin", "1234", 1}, {"user", "123", 0}};
+User users[] = {
+    {"admin", "admin123", 1},
+    {"user1", "pass1", 0},
+    {"user2", "pass2", 0},
+    {"user3", "pass3", 0},
+};
 int logged_in = -1;
 
 void init_auth() { printf("Auth initialized.\n"); }
 void login() {
   char uname[20], pwd[20];
   printf("Username: ");
-  scanf("%s", uname);
+  scanf("%19s", uname);
   printf("Password: ");
-  scanf("%s", pwd);
-  for (int i = 0; i < 2; i++) {
+  scanf("%19s", pwd);
+  int user_count = (int)(sizeof(users) / sizeof(users[0]));
+  for (int i = 0; i < user_count; i++) {
     if (strcmp(uname, users[i].username) == 0 &&
         strcmp(pwd, users[i].password) == 0) {
       logged_in = i;
