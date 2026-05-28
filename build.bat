@@ -1,6 +1,7 @@
 @echo off
 echo Building MiniOS...
-gcc -Wall main.c cli/cli.c process/process.c filesystem/filesystem.c security/auth.c monitor/monitor.c ai/ai.c -o MiniOS.exe -lws2_32
+cmd /c del /f /q MiniOS.exe
+gcc -Wall main.c cli/cli.c process/process.c filesystem/filesystem.c security/auth.c monitor/monitor.c ai/ai.c -o MiniOS.exe -lws2_32 -lshell32
 if %errorlevel% neq 0 (
     echo Build failed!
     exit /b %errorlevel%

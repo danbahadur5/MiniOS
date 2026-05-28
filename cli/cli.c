@@ -87,10 +87,9 @@ void help_command() {
 
   printf("  " COLOR_BOLD "Process Management:" COLOR_RESET "\n");
   printf("    ps                  - List all processes\n");
-  printf("    create_process      - Create a new process\n");
+  printf("    open <software>     - Open a software app\n");
+  printf("    software            - List available software apps\n");
   printf("    kill <pid>          - Terminate a process\n");
-  printf("    suspend <pid>       - Suspend (block) a process\n");
-  printf("    resume <pid>        - Resume (unblock) a process\n");
   printf("    top                 - Show CPU and process stats\n");
 
   printf("  " COLOR_BOLD "Filesystem:" COLOR_RESET "\n");
@@ -100,16 +99,23 @@ void help_command() {
   printf("    mv <old> <new>      - Rename a file\n");
   printf("    write <name> <txt>  - Write text to a file\n");
   printf("    cat <name>          - Read file content\n");
+  printf("    show <name>         - Show file content\n");
   printf("    share <name> <enable|disable> - Set file share (read-only for others)\n");
   printf("    mkdir <name>        - Create directory\n");
   printf("    rmdir <name>        - Remove directory (must be empty)\n");
 
   printf("  " COLOR_BOLD "AI & Automation:" COLOR_RESET "\n");
-  printf("    ai ask <question>       - Ask Ollama AI a question\n");
-  printf("    ai summarize <text>     - Summarize text using AI\n");
-  printf("    ai automate <task>      - Suggest MiniOS commands for a task\n");
-  printf("    ai models               - List available AI models\n");
-  printf("    ai model <name>         - Set active AI model\n");
+  printf("    ai ask <question>        - Ask Ollama AI a question\n");
+  printf("    ai summarize <text>      - Summarize text using AI\n");
+  printf("    ai automate <task>       - Suggest MiniOS commands for a task\n");
+  printf("    ai translate <text> to <lang> - Translate text to a language\n");
+  printf("    ai explain <topic>       - Explain a concept or command\n");
+  printf("    ai code <description>    - Generate C code\n");
+  printf("    ai fix <error>           - Diagnose and fix an error\n");
+  printf("    ai chat <message>        - Multi-turn conversation with AI\n");
+  printf("    ai chat reset            - Clear chat history\n");
+  printf("    ai models                - List available AI models\n");
+  printf("    ai model <name>          - Set active AI model\n");
 }
 
 void clear_screen() {
@@ -137,6 +143,7 @@ void start_cli() {
       break;
     }
 
+    input[strcspn(input, "\r")] = 0;
     input[strcspn(input, "\n")] = 0;
 
     if (strlen(input) == 0)
@@ -198,8 +205,6 @@ void start_cli() {
       break;
     } else if (strcmp(command, "ps") == 0) {
       list_processes();
-    } else if (strcmp(command, "create_process") == 0) {
-      create_process();
     } else if (strcmp(command, "kill") == 0) {
       if (arg1) {
         int pid = atoi(arg1);
@@ -207,23 +212,17 @@ void start_cli() {
       } else {
         printf(COLOR_RED "Usage: kill <pid>\n" COLOR_RESET);
       }
-    } else if (strcmp(command, "suspend") == 0) {
-      if (arg1) {
-        int pid = atoi(arg1);
-        suspend_process(pid);
-      } else {
-        printf(COLOR_RED "Usage: suspend <pid>\n" COLOR_RESET);
-      }
-    } else if (strcmp(command, "resume") == 0) {
-      if (arg1) {
-        int pid = atoi(arg1);
-        resume_process(pid);
-      } else {
-        printf(COLOR_RED "Usage: resume <pid>\n" COLOR_RESET);
-      }
     } else if (strcmp(command, "top") == 0) {
       show_cpu_usage();
       show_process_stats();
+    } else if (strcmp(command, "open") == 0) {
+      if (arg1) {
+        open_software(arg1);
+      } else {
+        printf(COLOR_RED "Usage: open <software>\n" COLOR_RESET);
+      }
+    } else if (strcmp(command, "software") == 0) {
+      list_available_software();
     } else if (strcmp(command, "uptime") == 0) {
       show_uptime();
     } else if (strcmp(command, "ls") == 0) {
@@ -251,6 +250,12 @@ void start_cli() {
         write_file(arg1, arg2);
       } else {
         printf(COLOR_RED "Usage: write <filename> <content>\n" COLOR_RESET);
+      }
+    } else if (strcmp(command, "show") == 0) {
+      if (arg1) {
+        read_file(arg1);
+      } else {
+        printf(COLOR_RED "Usage: show <filename>\n" COLOR_RESET);
       }
     } else if (strcmp(command, "cat") == 0) {
       if (arg1) {
@@ -286,7 +291,7 @@ void start_cli() {
       }
     } else if (strcmp(command, "ai") == 0) {
       if (!arg1) {
-        printf(COLOR_RED "Usage: ai <ask|summarize|automate|models|model>\n" COLOR_RESET);
+        printf(COLOR_RED "Usage: ai <ask|summarize|automate|translate|explain|code|fix|chat|models|model>\n" COLOR_RESET);
       } else if (strcmp(arg1, "models") == 0) {
         const char *avail = ai_get_available_models();
         const char *cur = ai_get_model();
@@ -310,7 +315,7 @@ void start_cli() {
         }
       } else if (strcmp(arg1, "ask") == 0) {
         if (arg2) {
-          char response[4096];
+          char response[8192];
           fflush(stdout);
           if (ai_ask(arg2, response, sizeof(response))) {
             printf("\n" COLOR_CYAN "AI Response:" COLOR_RESET " %s\n", response);
@@ -322,7 +327,7 @@ void start_cli() {
         }
       } else if (strcmp(arg1, "summarize") == 0) {
         if (arg2) {
-          char summary[4096];
+          char summary[8192];
           if (ai_summarize(arg2, summary, sizeof(summary))) {
             printf("\n" COLOR_CYAN "Summary:" COLOR_RESET " %s\n", summary);
           } else {
@@ -333,15 +338,84 @@ void start_cli() {
         }
       } else if (strcmp(arg1, "automate") == 0) {
         if (arg2) {
-          char suggestion[4096];
+          char suggestion[8192];
           if (ai_automate(arg2, suggestion, sizeof(suggestion))) {
-            printf("\n" COLOR_CYAN "Automation Suggestion:" COLOR_RESET
-                   " %s\n", suggestion);
+            printf("\n" COLOR_CYAN "Automation:" COLOR_RESET " %s\n", suggestion);
           } else {
             printf(COLOR_RED "Automation request failed.\n" COLOR_RESET);
           }
         } else {
           printf(COLOR_RED "Usage: ai automate <task description>\n" COLOR_RESET);
+        }
+      } else if (strcmp(arg1, "translate") == 0) {
+        if (arg2) {
+          const char *to_ptr = NULL, *p = arg2;
+          while ((p = strstr(p, " to ")) != NULL) { to_ptr = p; p += 4; }
+          if (to_ptr) {
+            char text[2048], lang[256];
+            size_t tlen = (size_t)(to_ptr - arg2);
+            if (tlen >= sizeof(text)) tlen = sizeof(text) - 1;
+            strncpy(text, arg2, tlen); text[tlen] = '\0';
+            strncpy(lang, to_ptr + 4, sizeof(lang) - 1); lang[sizeof(lang) - 1] = '\0';
+            char translation[8192];
+            if (ai_translate(text, lang, translation, sizeof(translation))) {
+              printf("\n" COLOR_CYAN "Translation:" COLOR_RESET " %s\n", translation);
+            } else {
+              printf(COLOR_RED "Translation failed.\n" COLOR_RESET);
+            }
+          } else {
+            printf(COLOR_RED "Usage: ai translate <text> to <language>\n" COLOR_RESET);
+          }
+        } else {
+          printf(COLOR_RED "Usage: ai translate <text> to <language>\n" COLOR_RESET);
+        }
+      } else if (strcmp(arg1, "explain") == 0) {
+        if (arg2) {
+          char explanation[8192];
+          if (ai_explain(arg2, explanation, sizeof(explanation))) {
+            printf("\n" COLOR_CYAN "Explanation:" COLOR_RESET " %s\n", explanation);
+          } else {
+            printf(COLOR_RED "Explanation request failed.\n" COLOR_RESET);
+          }
+        } else {
+          printf(COLOR_RED "Usage: ai explain <topic>\n" COLOR_RESET);
+        }
+      } else if (strcmp(arg1, "code") == 0) {
+        if (arg2) {
+          char code[8192];
+          if (ai_code(arg2, code, sizeof(code))) {
+            printf("\n" COLOR_CYAN "Generated Code:" COLOR_RESET "\n%s\n", code);
+          } else {
+            printf(COLOR_RED "Code generation failed.\n" COLOR_RESET);
+          }
+        } else {
+          printf(COLOR_RED "Usage: ai code <description>\n" COLOR_RESET);
+        }
+      } else if (strcmp(arg1, "fix") == 0) {
+        if (arg2) {
+          char fix[8192];
+          if (ai_fix(arg2, fix, sizeof(fix))) {
+            printf("\n" COLOR_CYAN "Fix Suggestion:" COLOR_RESET " %s\n", fix);
+          } else {
+            printf(COLOR_RED "Error diagnosis failed.\n" COLOR_RESET);
+          }
+        } else {
+          printf(COLOR_RED "Usage: ai fix <error>\n" COLOR_RESET);
+        }
+      } else if (strcmp(arg1, "chat") == 0) {
+        if (arg2 && strcmp(arg2, "reset") == 0) {
+          ai_chat_reset();
+        } else if (arg2) {
+          char response[8192];
+          fflush(stdout);
+          if (ai_chat_send(arg2, response, sizeof(response))) {
+            printf("\n" COLOR_CYAN "AI:" COLOR_RESET " %s\n", response);
+          } else {
+            printf(COLOR_RED "Chat request failed.\n" COLOR_RESET);
+          }
+        } else {
+          printf("Chat session active. Type messages to continue.\n");
+          printf("Use: ai chat reset to clear history.\n");
         }
       } else {
         printf(COLOR_RED "Unknown ai subcommand: %s\n" COLOR_RESET, arg1);

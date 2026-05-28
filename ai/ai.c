@@ -8,9 +8,12 @@
 #define OLLAMA_HOST "127.0.0.1"
 #define OLLAMA_PORT 11434
 #define BUF_SIZE 32768
+#define DEFAULT_NUM_PREDICT 2048
+#define DEFAULT_TEMPERATURE 0.7
 
 static char ai_model[128] = "";
 static char available_models[1024] = "";
+static char chat_history[65536] = "";
 
 void init_ai() {
     printf("AI Module initializing...\n");
@@ -33,7 +36,8 @@ void init_ai() {
         closesocket(sock); WSACleanup();
         printf("  Ollama not found at %s:%d\n", OLLAMA_HOST, OLLAMA_PORT);
         printf("  Install Ollama from https://ollama.com and pull a model.\n");
-        printf("  AI commands will be unavailable until Ollama is running.\n");
+        strncpy(ai_model, "llama3:latest", sizeof(ai_model) - 1);
+        printf("  Defaulting to model: %s\n", ai_model);
         return;
     }
 
@@ -234,41 +238,48 @@ static int req_ollama(const char *api_path, const char *json_body,
     return 0;
 }
 
-int ai_ask(const char *prompt, char *response, int max_len) {
+static int send_prompt(const char *prompt, char *response, int max_len) {
     char escaped[BUF_SIZE];
     escape_json_string(prompt, escaped, sizeof(escaped));
 
     printf("  Ollama generating (model: %s)...\n", ai_model);
     printf("  (This may take a while if the model needs to load)\n");
 
-    // Try /api/chat first, then /api/generate
     char body[BUF_SIZE];
     snprintf(body, sizeof(body),
         "{\"model\":\"%s\",\"messages\":[{\"role\":\"user\","
-        "\"content\":\"%s\"}],\"stream\":false}",
-        ai_model, escaped);
+        "\"content\":\"%s\"}],\"stream\":false,"
+        "\"options\":{\"num_predict\":%d,\"temperature\":%.1f}}",
+        ai_model, escaped, DEFAULT_NUM_PREDICT, DEFAULT_TEMPERATURE);
 
     if (req_ollama("/api/chat", body, response, max_len))
         return 1;
 
     snprintf(body, sizeof(body),
-        "{\"model\":\"%s\",\"prompt\":\"%s\",\"stream\":false}",
-        ai_model, escaped);
+        "{\"model\":\"%s\",\"prompt\":\"%s\",\"stream\":false,"
+        "\"options\":{\"num_predict\":%d,\"temperature\":%.1f}}",
+        ai_model, escaped, DEFAULT_NUM_PREDICT, DEFAULT_TEMPERATURE);
 
     if (req_ollama("/api/generate", body, response, max_len))
         return 1;
 
-    printf("  Error: Could not get response from model '%s'.\n"
-           "  Make sure the model is pulled: ollama pull %s\n",
-           ai_model, ai_model);
     return 0;
+}
+
+int ai_ask(const char *prompt, char *response, int max_len) {
+    if (!send_prompt(prompt, response, max_len)) {
+        printf("  Error: Could not get response from model '%s'.\n"
+               "  Make sure the model is pulled: ollama pull %s\n",
+               ai_model, ai_model);
+        return 0;
+    }
+    return 1;
 }
 
 int ai_summarize(const char *text, char *summary, int max_len) {
     char prompt[4096];
     snprintf(prompt, sizeof(prompt),
-        "Summarize the following text concisely in 2-3 sentences:\n\n%s",
-        text);
+        "Summarize the following text concisely in 2-3 sentences:\n\n%s", text);
     return ai_ask(prompt, summary, max_len);
 }
 
@@ -279,4 +290,99 @@ int ai_automate(const char *task, char *result, int max_len) {
         "simulator). Given this task, suggest the exact MiniOS command(s) "
         "to run and briefly explain:\nTask: %s", task);
     return ai_ask(prompt, result, max_len);
+}
+
+int ai_translate(const char *text, const char *lang, char *result, int max_len) {
+    char prompt[4096];
+    snprintf(prompt, sizeof(prompt),
+        "Translate the following text to %s. Respond with only the translation, "
+        "no explanations:\n\n%s", lang, text);
+    return ai_ask(prompt, result, max_len);
+}
+
+int ai_explain(const char *topic, char *result, int max_len) {
+    char prompt[4096];
+    snprintf(prompt, sizeof(prompt),
+        "Explain the following concept briefly and clearly:\n\n%s", topic);
+    return ai_ask(prompt, result, max_len);
+}
+
+int ai_code(const char *description, char *result, int max_len) {
+    char prompt[4096];
+    snprintf(prompt, sizeof(prompt),
+        "Write C code for the following. Provide only the code with brief "
+        "comments, no extra explanation:\n\n%s", description);
+    return ai_ask(prompt, result, max_len);
+}
+
+int ai_fix(const char *error, char *result, int max_len) {
+    char prompt[4096];
+    snprintf(prompt, sizeof(prompt),
+        "Explain what caused this error and how to fix it:\n\n%s", error);
+    return ai_ask(prompt, result, max_len);
+}
+
+void ai_chat_reset() {
+    chat_history[0] = '\0';
+    printf("  Chat history cleared.\n");
+}
+
+int ai_chat_send(const char *message, char *response, int max_len) {
+    if (*ai_model == '\0') {
+        printf("  Error: No AI model available.\n");
+        return 0;
+    }
+
+    char escaped_msg[BUF_SIZE];
+    escape_json_string(message, escaped_msg, sizeof(escaped_msg));
+
+    char user_entry[2048];
+    snprintf(user_entry, sizeof(user_entry),
+        "{\"role\":\"user\",\"content\":\"%s\"}", escaped_msg);
+
+    char body[BUF_SIZE];
+    if (chat_history[0] == '\0') {
+        snprintf(body, sizeof(body),
+            "{\"model\":\"%s\",\"messages\":[%s],\"stream\":false,"
+            "\"options\":{\"num_predict\":%d,\"temperature\":%.1f}}",
+            ai_model, user_entry, DEFAULT_NUM_PREDICT, DEFAULT_TEMPERATURE);
+    } else {
+        snprintf(body, sizeof(body),
+            "{\"model\":\"%s\",\"messages\":[%s,%s],\"stream\":false,"
+            "\"options\":{\"num_predict\":%d,\"temperature\":%.1f}}",
+            ai_model, chat_history, user_entry, DEFAULT_NUM_PREDICT, DEFAULT_TEMPERATURE);
+    }
+
+    printf("  Ollama generating (model: %s)...\n", ai_model);
+
+    if (!req_ollama("/api/chat", body, response, max_len)) {
+        snprintf(body, sizeof(body),
+            "{\"model\":\"%s\",\"prompt\":\"%s\",\"stream\":false,"
+            "\"options\":{\"num_predict\":%d,\"temperature\":%.1f}}",
+            ai_model, escaped_msg, DEFAULT_NUM_PREDICT, DEFAULT_TEMPERATURE);
+        if (!req_ollama("/api/generate", body, response, max_len)) {
+            printf("  Error: Could not get response.\n");
+            return 0;
+        }
+    }
+
+    char escaped_resp[BUF_SIZE];
+    escape_json_string(response, escaped_resp, sizeof(escaped_resp));
+
+    char assistant_entry[2048];
+    snprintf(assistant_entry, sizeof(assistant_entry),
+        "{\"role\":\"assistant\",\"content\":\"%s\"}", escaped_resp);
+
+    if (chat_history[0] == '\0') {
+        snprintf(chat_history, sizeof(chat_history),
+            "%s,%s", user_entry, assistant_entry);
+    } else {
+        int cur = strlen(chat_history);
+        if (cur < (int)sizeof(chat_history) - 4096) {
+            snprintf(chat_history + cur, sizeof(chat_history) - cur,
+                ",%s,%s", user_entry, assistant_entry);
+        }
+    }
+
+    return 1;
 }
