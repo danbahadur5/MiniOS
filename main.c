@@ -7,11 +7,13 @@
 #include "security/auth.h"
 #include "monitor/monitor.h"
 
-void boot_animation() {
+void boot_animation()
+{
     printf("Booting MiniOS v1.0...\n");
     printf("[");
-    for (int i = 0; i <= 50; i++) {
-        printf("*");
+    for (int i = 0; i <= 50; i++)
+    {
+        printf("=");
         Sleep(30);
     }
     printf("] 100%%\n");
@@ -30,7 +32,8 @@ void boot_animation() {
     Sleep(500);
 }
 
-int main() {
+int main()
+{
     boot_animation();
     load_filesystem();
     init_auth();
