@@ -29,6 +29,9 @@ typedef struct
   char owner[20];
   int system;
 } Alias;
+
+
+
 static Alias aliases[MAX_ALIASES];
 static int alias_count = 0;
 

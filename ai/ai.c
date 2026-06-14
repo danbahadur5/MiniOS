@@ -1,6 +1,7 @@
 #include "ai.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 #include <string.h>
 #include <winsock2.h>
 #include <windows.h>
@@ -319,8 +320,14 @@ static int send_prompt(const char *prompt, char *response, int max_len)
     char escaped[BUF_SIZE];
     escape_json_string(prompt, escaped, sizeof(escaped));
 
-    printf("  Ollama generating (model: %s)...\n", ai_model);
-    printf("  (This may take a while if the model needs to load)\n");
+    printf("  Ollama generating (model: %s)...\n \n", ai_model);
+
+    printf("   Waiting for response ");
+    for (int i = 0; i < 6; i++)
+    {
+        printf(".");
+        Sleep(300);
+    }
 
     char body[BUF_SIZE];
     snprintf(body, sizeof(body),

@@ -17,8 +17,6 @@ build.bat
 ```
 gcc -Wall main.c cli/cli.c process/process.c filesystem/filesystem.c security/auth.c monitor/monitor.c ai/ai.c -o MiniOS.exe -lws2_32
 
-
-MiniOS.exe
 ```
 
 ### 3. AI Features (optional)
@@ -35,7 +33,7 @@ Then AI commands (`ai ask`, `ai summarize`, `ai automate`) will work inside Mini
 
 - `help` — list all commands
 - `login` — switch user (admin:admin123, user1:pass1, etc.)
-- `open <software>` — open a real Windows app like `notepad`, `wordpad`, `mspaint`, `calculator`, `taskmgr`, `powershell`, `cmd`, `chrome`, `edge`, or `explorer`
+- `open <software>` — open a real Windows app like `notepad` etc
 - `software` — list available software apps
-- `shutdown` — exit
+- `shutdown and off` — exit
 - `ai ask <question>` — ask the local AI

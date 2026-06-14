@@ -7,6 +7,7 @@ typedef struct
   char password[20];
   int is_admin;
 } User;
+
 User users[] = {
     {"admin", "admin123", 1},
     {"user1", "pass1", 0},
